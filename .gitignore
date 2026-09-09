@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.venv/
+env/
+gpt-env/
+
+# Datos generados (se pueden recrear con prepare_data.py)
+*.npy
+*.bin
+meta.pkl
+
+# Checkpoints de modelos entrenados
+*.pt
+*.ckpt
+out/
+
+# VS Code / editor
+.vscode/
