@@ -1,23 +1,59 @@
-Shakespeare char split text into char (NOT TOKENS)
+# Shakespeare (character-level)
 
-Length of text: 1115394 characters
+Tiny Shakespeare dataset tokenized **at the character level** (not words or sub-words/BPE). Every unique character in the text is a token.
 
-Unique characters: 65
-Vocab size: 65
-Unique characters: 
-    !$&',-.3:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
+Source: [`karpathy/char-rnn`](https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt)
 
-stoi --> string to int
-    stoi: {'\n': 0, ' ': 1, '!': 2, '$': 3, '&': 4, "'": 5, ',': 6, '-': 7, '.': 8, '3': 9, ':': 10, ';': 11, '?': 12, 'A': 13, 'B': 14, 'C': 15, 'D': 16, 'E': 17, 'F': 18, 'G': 19, 'H': 20, 'I': 21, 'J': 22, 'K': 23, 'L': 24, 'M': 25, 'N': 26, 'O': 27, 'P': 28, 'Q': 29, 'R': 30, 'S': 31, 'T': 32, 'U': 33, 'V': 34, 'W': 35, 'X': 36, 'Y': 37, 'Z': 38, 'a': 39, 'b': 40, 'c': 41, 'd': 42, 'e': 43, 'f': 44, 'g': 45, 'h': 46, 'i': 47, 'j': 48, 'k': 49, 'l': 50, 'm': 51, 'n': 52, 'o': 53, 'p': 54, 'q': 55, 'r': 56, 's': 57, 't': 58, 'u': 59, 'v': 60, 'w': 61, 'x': 62, 'y': 63, 'z': 64}
+## Text stats
 
-itos --> int to string
-    itos: {0: '\n', 1: ' ', 2: '!', 3: '$', 4: '&', 5: "'", 6: ',', 7: '-', 8: '.', 9: '3', 10: ':', 11: ';', 12: '?', 13: 'A', 14: 'B', 15: 'C', 16: 'D', 17: 'E', 18: 'F', 19: 'G', 20: 'H', 21: 'I', 22: 'J', 23: 'K', 24: 'L', 25: 'M', 26: 'N', 27: 'O', 28: 'P', 29: 'Q', 30: 'R', 31: 'S', 32: 'T', 33: 'U', 34: 'V', 35: 'W', 36: 'X', 37: 'Y', 38: 'Z', 39: 'a', 40: 'b', 41: 'c', 42: 'd', 43: 'e', 44: 'f', 45: 'g', 46: 'h', 47: 'i', 48: 'j', 49: 'k', 50: 'l', 51: 'm', 52: 'n', 53: 'o', 54: 'p', 55: 'q', 56: 'r', 57: 's', 58: 't', 59: 'u', 60: 'v', 61: 'w', 62: 'x', 63: 'y', 64: 'z'}
+| | |
+|---|---|
+| Total length | 1,115,394 characters |
+| Unique characters (vocab size) | 65 |
 
+**Vocabulary:**
+```
+\n   !$&',-.3:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
+```
 
-Train data shape: (1003854,) --> first 90% of the text
-Val data shape: (111540,) --> the 10% resting
+## Tokenization
 
-Train data type: uint16
-Val data type: uint16
+Direct character ↔ integer mapping, no BPE or external tokenization libraries:
 
-uint16 --> int and index ,we save tokens (char)IDs in disk. Depens on the vocab_size --> we need to be able to represent the highest number (vocab_size - 1) --> 2^16 = 65.536 (without sign, postive) 0 to 65.535 > vocab_size=65 
+- **`stoi`** (string → int): `{'\n': 0, ' ': 1, '!': 2, ..., 'z': 64}`
+- **`itos`** (int → string): the reverse mapping, `{0: '\n', 1: ' ', ..., 64: 'z'}`
+
+```python
+encode = lambda s: [stoi[c] for c in s]
+decode = lambda l: ''.join([itos[i] for i in l])
+```
+
+## Train / val split
+
+Simple split by index (not random): the first 90% of the text for training, the last 10% for validation.
+
+| Split | Shape | % of text |
+|---|---|---|
+| `train.npy` | `(1,003,854,)` | 90% |
+| `val.npy` | `(111,540,)` | 10% |
+
+## Storage format
+
+Encoded tokens are saved as `numpy` arrays of type **`uint16`** (unsigned integer, 2 bytes):
+
+- `uint16` represents the range `0` to `2^16 - 1` = **0 to 65,535**.
+- Since tokens are indices (never negative), we don't need a sign bit → `uint16` instead of `int16` (which would waste half its range on negative numbers we never use).
+- With `vocab_size = 65`, there's plenty of headroom, but `uint16` is used instead of `uint8` because the same pipeline is reused for larger vocabularies too (e.g. GPT-2's BPE tokenizer, `vocab_size = 50,257`, which no longer fits in `uint8` but does fit in `uint16`).
+
+## Generated files
+
+Running [`prepare_data.py`](prepare_data.py) on [`input.txt`](input.txt) produces:
+
+| File | Contents | Tracked in git |
+|---|---|---|
+| `input.txt` | Raw, unprocessed text | ✅ |
+| `train.npy` | Training tokens (`uint16`) | ❌ (regenerable) |
+| `val.npy` | Validation tokens (`uint16`) | ❌ (regenerable) |
+| `meta.pkl` | `{'vocab_size', 'stoi', 'itos'}` — needed to decode the model's output | ❌ (regenerable) |
+
+Generated files are not pushed to the repo (see `.gitignore`): they can be recreated in seconds by running `prepare_data.py`.
