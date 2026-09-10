@@ -37,7 +37,10 @@ def get_batch(split):
 
     return x, y # we return x and y as torch tensors 2D (batch_size, block_size)
 
-xb, yb = get_batch('train') # we will test the function by getting a batch of data for training
-print(f"xb.shape: {xb.shape}, yb.shape: {yb.shape}") 
-print(xb[0, :10])
-print(yb[0, :10]) # we will print the first 10 characters of the first sequence in the batch for both x and y to see if they are shifted by one character
+if __name__ == '__main__':
+    # this block only runs when you execute this file directly (python batch_loader.py),
+    # not when another file does `from dataloader.batch_loader import get_batch`
+    xb, yb = get_batch('train') # we will test the function by getting a batch of data for training
+    print(f"xb.shape: {xb.shape}, yb.shape: {yb.shape}")
+    print(xb[0, :10])
+    print(yb[0, :10]) # we will print the first 10 characters of the first sequence in the batch for both x and y to see if they are shifted by one character
