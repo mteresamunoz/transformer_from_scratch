@@ -4,16 +4,18 @@ Bridges the pre-processed dataset (`.npy` files in `data/shakespeare_char/`) and
 
 This is also where `numpy` "hands off" to PyTorch: everything before this point (`prepare_data.py`) only used `numpy`; from here on, tensors take over.
 
-## Two independent hyperparameters: `batch_size` vs `block_size`
+## Two independent hyperparameters: `batch_size` vs `seq_length`
 
 These are easy to mix up, but they control two completely different axes of the data:
 
 | | Controls | Example value |
 |---|---|---|
 | `batch_size` | How many independent sequences are processed **in parallel** in one training step | 64 |
-| `block_size` | How many tokens are in **each** sequence — the context window | 256 |
+| `seq_length` | How many tokens are in **each** sequence of the current batch | 256 |
 
-Neither depends on the other, and `block_size` doesn't depend on the length of the raw text either — it's a design choice: how much context the model is allowed to look at when predicting the next character. The full dataset is one continuous stream of ~1,000,000 characters with no sentence boundaries, so `block_size` is just an arbitrary window length we cut out of that stream.
+Neither depends on the other, and `seq_length` doesn't depend on the length of the raw text either — it's a design choice: how much context the model is allowed to look at when predicting the next character. The full dataset is one continuous stream of ~1,000,000 characters with no sentence boundaries, so `seq_length` is just an arbitrary window length we cut out of that stream.
+
+**`seq_length` is not quite the same idea as "context window" — worth flagging now.** In `transformers`-library terms, tensor shapes are documented as `(batch_size, sequence_length)`: `sequence_length` is simply how long *this particular* batch of inputs happens to be. The **context window** (HF calls it `n_positions` / `max_position_embeddings`) is a fixed architectural limit — the maximum sequence length the model's positional embeddings and attention can ever handle, baked in when the model is built. In this project the two happen to be the exact same number, because nanoGPT always trains on fixed-size chunks equal to the model's max supported context — but conceptually they're different things: once a model is trained, a real input to it (e.g. a short prompt) can have a `sequence_length` anywhere from 1 up to the context window, not necessarily equal to it. We'll come back to this distinction when we build the positional embedding table in `model/gpt.py`.
 
 ## `get_batch(split)`
 
@@ -21,27 +23,27 @@ The core function of this module. Given a split (`'train'` or `'val'`), it retur
 
 ```python
 x, y = get_batch('train')
-x.shape  # (batch_size, block_size)
-y.shape  # (batch_size, block_size)
+x.shape  # (batch_size, seq_length)
+y.shape  # (batch_size, seq_length)
 ```
 
-- **`x`**: the input — `batch_size` chunks of `block_size` consecutive tokens, cut from random positions in the dataset.
+- **`x`**: the input — `batch_size` chunks of `seq_length` consecutive tokens, cut from random positions in the dataset.
 - **`y`**: the target — the same chunks shifted one position to the right, i.e. `y[b, t] == x[b, t+1]`. At every position `t`, `y` tells the model "this is the character that actually comes next."
 
-Both `x` and `y` are processed **at once**, in a single forward pass — the model sees the whole `(batch_size, block_size)` matrix, not one sequence at a time. This is what makes training on a GPU efficient: it's one batched matrix operation instead of `batch_size` sequential ones.
+Both `x` and `y` are processed **at once**, in a single forward pass — the model sees the whole `(batch_size, seq_length)` matrix, not one sequence at a time. This is what makes training on a GPU efficient: it's one batched matrix operation instead of `batch_size` sequential ones.
 
 ### Steps inside `get_batch`
 
 1. Pick the right array (`train_data` or `val_data`) depending on `split`.
 2. Draw `batch_size` random starting indices with `torch.randint`.
-3. Slice out a chunk of length `block_size` starting at each index, for both `x` (`data[i : i+block_size]`) and `y` (`data[i+1 : i+block_size+1]`).
+3. Slice out a chunk of length `seq_length` starting at each index, for both `x` (`data[i : i+seq_length]`) and `y` (`data[i+1 : i+seq_length+1]`).
 4. Stack all the chunks into single 2D tensors with `torch.stack`.
 
 ## What's actually random: rows, not characters
 
-It's easy to picture the `(batch_size, block_size)` matrix as tokens scattered randomly all over the place, but that's not quite it — there are two different levels of randomness here:
+It's easy to picture the `(batch_size, seq_length)` matrix as tokens scattered randomly all over the place, but that's not quite it — there are two different levels of randomness here:
 
-- **Within one row (one sequence): not random at all.** Each row is a **contiguous** run of `block_size` characters, taken exactly as they appear in the original text — nothing is shuffled or reordered. If a chunk starts at position 5000 of the text, that row is literally `data[5000:5256]`, character by character, in its real order.
+- **Within one row (one sequence): not random at all.** Each row is a **contiguous** run of `seq_length` characters, taken exactly as they appear in the original text — nothing is shuffled or reordered. If a chunk starts at position 5000 of the text, that row is literally `data[5000:5256]`, character by character, in its real order.
 - **Across rows: yes, random.** What's random is only *where each row starts*. Row 0 might start at position 5000, row 1 at position 300,000, row 2 at position 812 — unrelated points scattered across the whole ~1,000,000-character text.
 
 ```
@@ -56,25 +58,25 @@ row 2 (x[2]):      "e king is dead, long live the"    ← 256 CONSECUTIVE chars 
 
 Each row is a coherent, readable fragment of the real text (a genuine "window" into it), but different rows in the same batch are usually unrelated to each other — random fragments from completely different parts of the play.
 
-Why sample random starting points instead of cutting the text into fixed, non-overlapping chunks (`0-256`, `256-512`, ...)? Because with `block_size=256` over ~1,000,000 characters there are almost 1,000,000 possible (overlapping) starting positions, so the model sees a different combination of context on every call to `get_batch`, instead of always the same few thousand fixed partitions.
+Why sample random starting points instead of cutting the text into fixed, non-overlapping chunks (`0-256`, `256-512`, ...)? Because with `seq_length=256` over ~1,000,000 characters there are almost 1,000,000 possible (overlapping) starting positions, so the model sees a different combination of context on every call to `get_batch`, instead of always the same few thousand fixed partitions.
 
-## Why the random starting index is capped at `len(data) - block_size`
+## Why the random starting index is capped at `len(data) - seq_length`
 
 `batch_size` and this cap have nothing to do with each other — that's a common mix-up. `torch.randint(low, high, size)` has two *independent* arguments:
 
 - `size` (here `(batch_size,)`) — **how many** random numbers to generate.
 - `low`/`high` — the **range of values** each of those numbers can take.
 
-The range has to be capped so that every chunk we cut actually has `block_size` elements — cutting one that runs past the end of the array would silently return a shorter chunk instead of raising an error, which then breaks `torch.stack` (it requires every tensor to have the same shape).
+The range has to be capped so that every chunk we cut actually has `seq_length` elements — cutting one that runs past the end of the array would silently return a shorter chunk instead of raising an error, which then breaks `torch.stack` (it requires every tensor to have the same shape).
 
-**Small example to see why:** say `len(data) = 20` and `block_size = 5`.
+**Small example to see why:** say `len(data) = 20` and `seq_length = 5`.
 
 - If we allowed a starting index of `i = 18`, then `data[18:23]` doesn't error — Python slicing just returns whatever exists, so we'd get only `data[18]` and `data[19]`: **2 elements instead of 5**.
-- The last *safe* starting index is `len(data) - block_size = 15`, because `data[15:20]` reaches exactly the last element (`data[19]`) without running out.
+- The last *safe* starting index is `len(data) - seq_length = 15`, because `data[15:20]` reaches exactly the last element (`data[19]`) without running out.
 
-So the valid range for the starting index is `0` to `len(data) - block_size` — guaranteeing every chunk is exactly `block_size` long, regardless of `batch_size` (which only decides how many such indices we draw).
+So the valid range for the starting index is `0` to `len(data) - seq_length` — guaranteeing every chunk is exactly `seq_length` long, regardless of `batch_size` (which only decides how many such indices we draw).
 
-With the real numbers here (`len(data) ≈ 1,000,000`, `block_size = 256`), the valid range is roughly `0` to `999,744` — still enormous; `batch_size = 64` just means we draw 64 random values from within that range.
+With the real numbers here (`len(data) ≈ 1,000,000`, `seq_length = 256`), the valid range is roughly `0` to `999,744` — still enormous; `batch_size = 64` just means we draw 64 random values from within that range.
 
 ## A note on dtypes
 

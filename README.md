@@ -8,18 +8,19 @@ The model is trained on [Tiny Shakespeare](https://raw.githubusercontent.com/kar
 
 ## Project structure
 
-```
+```text
 nanoGPT/
 ├── data/
 │   └── shakespeare_char/
 │       ├── input.txt          # raw training text
 │       ├── prepare_data.py    # reads the text, builds the char vocab, encodes it, saves it to disk
 │       ├── inspect_data.py    # loads the generated files back to inspect/verify them
+│       ├── tokenizer.py       # reusable get_tokenizer() -> (encode, decode, vocab_size)
 │       └── README.md          # dataset stats, tokenization scheme, storage format
 │
 ├── dataloader/
 │   ├── batch_loader.py        # samples random (x, y) mini-batches from the encoded dataset
-│   └── README.md              # explains batch_size, block_size and the sampling strategy
+│   └── README.md              # explains batch_size, seq_length and the sampling strategy
 │
 ├── model/
 │   ├── bigram.py               # simplest possible baseline language model (no attention)

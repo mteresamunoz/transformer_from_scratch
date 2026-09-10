@@ -10,7 +10,7 @@ class BigramLanguageModel(torch.nn.Module):
         self.token_embedding_table = torch.nn.Embedding(vocab_size, vocab_size)
 
     def forward(self, idx, targets=None):
-        # idx is a tensor of shape (batch_size, block_size) containing the indices of the input words.
+        # idx is a tensor of shape (batch_size, seq_length) containing the indices of the input words.
         # We pass these indices through the embedding layer to get the logits for the next word predictions.
         logits = self.token_embedding_table(idx)
 

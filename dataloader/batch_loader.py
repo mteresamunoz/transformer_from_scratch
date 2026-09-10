@@ -10,32 +10,32 @@ val_data = np.load(os.path.join(data_dir, 'val.npy'))
 
 # 2. choosing batch size and block size
 batch_size = 8 # how many independent sequences will we process in parallel 
-block_size = 32 # maximum length of each sequence --> context length, seq_length
+seq_length = 32 # length of each sequence (a.k.a. context window, for now — see dataloader/README.md)
 
-# 3. We need to cut the data into batches of sequences of length block_size
-#x = train_data[:block_size] # x is input FOR TRAINING, which is the first block_size characters of the training data
-#y = train_data[1:block_size+1] # y is the target, which is the next character in the sequence, so we shift the input by one character
+# 3. We need to cut the data into batches of sequences of length seq_length
+#x = train_data[:seq_length] # x is input FOR TRAINING, which is the first seq_length characters of the training data
+#y = train_data[1:seq_length+1] # y is the target, which is the next character in the sequence, so we shift the input by one character
 # BUT we have just one chunk of data, but we need to create a batch of data, so we will repeat this process batch_size times
-# a function that will generate a batch of data for training, and return x and y as torch tensors 2D (batch_size, block_size)
+# a function that will generate a batch of data for training, and return x and y as torch tensors 2D (batch_size, seq_length)
 
 def get_batch(split):
     # 1. we will choose the data based on the split (train or val)
     data = train_data if split == 'train' else val_data
 
     # 2. we will randomly choose batch_size starting indices for the sequences (o sea cogemos batch_size (en nuestro caso 8) indices aleatorios de la data)
-    ix = np.random.randint(0, len(data) - block_size, size=batch_size)
-    # max range is len(data) - block_size because we need to make sure that we have enough characters to create a sequence of length block_size
-    # we are saying "give me batch_size (8) random int between 0 and len(data) - block_size, and store them in ix"
+    ix = np.random.randint(0, len(data) - seq_length, size=batch_size)
+    # max range is len(data) - seq_length because we need to make sure that we have enough characters to create a sequence of length seq_length
+    # we are saying "give me batch_size (8) random int between 0 and len(data) - seq_length, and store them in ix"
 
     # 3. we will create the input and target sequences based on the starting indices
-    x = np.stack([data[i:i+block_size] for i in ix]) 
-    y = np.stack([data[i+1:i+block_size+1] for i in ix]) # y is the target, which is the next character in the sequence, so we shift the input by one character
+    x = np.stack([data[i:i+seq_length] for i in ix]) 
+    y = np.stack([data[i+1:i+seq_length+1] for i in ix]) # y is the target, which is the next character in the sequence, so we shift the input by one character
 
     # 4. we will convert x and y to torch tensors and return them
     x = torch.tensor(x, dtype=torch.long) # torch.long is the data type for integer tensors, which is what we need for our model
     y = torch.tensor(y, dtype=torch.long)
 
-    return x, y # we return x and y as torch tensors 2D (batch_size, block_size)
+    return x, y # we return x and y as torch tensors 2D (batch_size, seq_length)
 
 if __name__ == '__main__':
     # this block only runs when you execute this file directly (python batch_loader.py),

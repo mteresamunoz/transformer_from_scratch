@@ -51,11 +51,11 @@ logits[1] = row 2 = [ 0.05,  0.09, -0.31, 0.14]   # because idx[1] == 2
 
 ### Scaled up to the project's real shapes
 
-`idx` in practice is 2D: `(batch_size, block_size)`, e.g. `(64, 256)` — all integers, no floats. `table(idx)` looks up one row per integer, so the output gains an extra dimension: `logits.shape = (batch_size, block_size, vocab_size)`, e.g. `(64, 256, 65)`. Every position of every sequence gets back its own full row of `vocab_size` logits.
+`idx` in practice is 2D: `(batch_size, seq_length)`, e.g. `(64, 256)` — all integers, no floats. `table(idx)` looks up one row per integer, so the output gains an extra dimension: `logits.shape = (batch_size, seq_length, vocab_size)`, e.g. `(64, 256, 65)`. Every position of every sequence gets back its own full row of `vocab_size` logits.
 
 ### Why `(vocab_size, vocab_size)` here, and not a "real" embedding
 
-A typical model separates two steps: `nn.Embedding(vocab_size, n_embd)` (token → a vector of `n_embd` numbers, a meaningful learned representation) followed by `nn.Linear(n_embd, vocab_size)` (that vector → logits). The bigram model **collapses both into one table**, `(vocab_size, vocab_size)`: row `i` *is directly* the logits vector, with no representation step in between. It works only because the bigram has nothing else to compute — once real attention is added later, `n_embd` will be its own, separate hyperparameter (see `data/shakespeare_char/README.md` and the earlier discussion on `d_model`/`n_embd` vs `block_size`).
+A typical model separates two steps: `nn.Embedding(vocab_size, n_embd)` (token → a vector of `n_embd` numbers, a meaningful learned representation) followed by `nn.Linear(n_embd, vocab_size)` (that vector → logits). The bigram model **collapses both into one table**, `(vocab_size, vocab_size)`: row `i` *is directly* the logits vector, with no representation step in between. It works only because the bigram has nothing else to compute — once real attention is added later, `n_embd` will be its own, separate hyperparameter (see `data/shakespeare_char/README.md` and the earlier discussion on `d_model`/`n_embd` vs `seq_length`).
 
 ## `forward()`: with `targets` vs without
 
@@ -105,7 +105,7 @@ Once the model can produce `logits` for a context, generating text is a loop. Us
 4. `torch.multinomial(probs, 1)` → sample according to those probabilities — say index `2` (`'c'`) comes out.
 5. `idx = torch.cat((idx, [[2]]), dim=1)` → `idx` is now `[[0, 2]]` → text so far: `"ac"`.
 
-**Iteration 2**: repeat with `idx=[[0, 2]]`. The bigram has no memory, so only the last character (`'c'`) actually drives the next prediction — but the loop always appends to the *whole* growing context, which is exactly the pattern reused later when the model does have real memory of everything within `block_size`.
+**Iteration 2**: repeat with `idx=[[0, 2]]`. The bigram has no memory, so only the last character (`'c'`) actually drives the next prediction — but the loop always appends to the *whole* growing context, which is exactly the pattern reused later when the model does have real memory of everything within `seq_length`.
 
 **Why sample instead of just taking the highest logit?** Always picking the single most likely next character (*greedy decoding*) would make the model deterministic and repetitive for a given context ("the the the the..."). Sampling with `torch.multinomial` still favors likely characters but keeps variety across generations.
 
@@ -133,4 +133,4 @@ A parameter of the `generate()` call, chosen by us — not learned, not part of 
 
 - It's the number of *new* characters appended, not the total output length: starting from a 5-character context with `max_new_tokens=100` gives a `5 + 100 = 105`-character result.
 - It has no effect on training or on the model's weights — the same trained model can be called with `max_new_tokens=10` once and `max_new_tokens=1000` another time.
-- For the bigram model it can be any size, since there's no context limit — the model only ever looks at the last character anyway. Once real attention with a `block_size` is added, `idx` will need to be **cropped** to the last `block_size` tokens before each `forward()` call inside the loop, since the model won't be able to use more context than that. That crop isn't needed yet, but it's coming.
+- For the bigram model it can be any size, since there's no context limit — the model only ever looks at the last character anyway. Once real attention with a `seq_length` is added, `idx` will need to be **cropped** to the last `seq_length` tokens before each `forward()` call inside the loop, since the model won't be able to use more context than that. That crop isn't needed yet, but it's coming.

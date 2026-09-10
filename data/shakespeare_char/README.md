@@ -70,4 +70,14 @@ Running [`prepare_data.py`](prepare_data.py) on [`input.txt`](input.txt) produce
 | `val.npy` | Validation tokens (`uint16`) | ❌ (regenerable) |
 | `meta.pkl` | `{'vocab_size', 'stoi', 'itos'}` — needed to decode the model's output | ❌ (regenerable) |
 
+## `tokenizer.py`
+
+A small reuse helper so other scripts (`model/test_bigram.py`, `train.py`, `generate.py`, ...) don't each repeat "load `meta.pkl` + rebuild `encode`/`decode`" by hand. It does **not** pickle the `encode`/`decode` functions themselves — as covered above, lambdas aren't reliably picklable and shipping serialized code is bad practice anyway. Instead, `meta.pkl` keeps storing only raw data (`vocab_size`, `stoi`, `itos`), and `tokenizer.py` rebuilds the same one-line `encode`/`decode` from `prepare_data.py`, in one place:
+
+```python
+from data.shakespeare_char.tokenizer import get_tokenizer
+
+encode, decode, vocab_size = get_tokenizer()
+```
+
 Generated files are not pushed to the repo (see `.gitignore`): they can be recreated in seconds by running `prepare_data.py`.
