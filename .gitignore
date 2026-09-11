@@ -17,6 +17,7 @@ meta.pkl
 *.pt
 *.ckpt
 out/
+checkpoints/
 
 # VS Code / editor
 .vscode/

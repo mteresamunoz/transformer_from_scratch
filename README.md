@@ -28,7 +28,7 @@ nanoGPT/
 │   ├── multi_head_attention.py # several attention heads in parallel, concatenated
 │   ├── feedforward.py          # the per-token MLP inside each transformer block
 │   ├── block.py                 # one transformer block: attention + feedforward + residuals + layer norm
-│   ├── gpt.py                   # stacks N blocks into the full model
+│   ├── gpt.py                   # stacks N blocks into the full model, decoder-only 
 │   └── README.md                # architecture overview, tensor shapes at each stage
 │
 ├── train.py                    # training loop: forward pass, loss, backward pass, optimizer step
@@ -41,7 +41,7 @@ nanoGPT/
 1. **`data/`** turns raw text into integer token IDs and stores them on disk as compact `numpy` arrays (`.npy`), together with the vocabulary mapping needed to decode predictions back into text.
 2. **`dataloader/`** reads those arrays and produces the mini-batches (`x`, `y`) that the model trains on — this is also where PyTorch tensors first appear, converting from disk-stored `numpy` data into tensors just before they're needed.
 3. **`model/`** defines the neural network itself, built up in stages: starting from a minimal baseline with no attention, then adding self-attention piece by piece (single head → multi-head → full transformer block), until it matches a small decoder-only GPT.
-4. **`train.py`** ties the data loader and the model together: it runs the training loop, evaluates the loss on train/validation splits, and saves checkpoints.
+4. **`train.py`** ties the data loader and the model together: it runs the training loop, evaluates the loss on train/validation splits, and saves checkpoints. See [`TRAINING.md`](TRAINING.md) for a walkthrough of what actually happens (and to whom) at each stage — initializing the model, training it, and later generating text from it.
 5. **`generate.py`** loads a trained model and samples new text from it, one token at a time, using the same tokenizer/vocab defined in `data/`.
 
 ## Why not use `transformers` / `tiktoken`
