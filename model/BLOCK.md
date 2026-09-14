@@ -50,3 +50,38 @@ Both `ln1` and `ln2` are separate `nn.LayerNorm(n_embd)` instances — each sub-
 ### Why the residual connection (`x + ...`) matters
 
 Without `+ x`, stacking many blocks would mean the original signal has to survive being transformed correctly by every single block in a row — if any one block's output is a bit off, the error compounds through the whole stack, and gradients have to flow back through every transformation to reach early blocks (which tends to vanish in deep networks). With `x + sublayer(x)`, each block only has to learn a *correction* to add on top of what's already there, and gradients have a direct path (`+`) straight back to earlier layers during `backward()`, bypassing the sublayer's transformation entirely if needed. This is what makes it practical to stack many blocks deep.
+
+## Dropout: regularization, applied to activations — never to weights
+
+Dropout randomly zeroes out some of a layer's **output values (activations)**, freshly and differently on every forward call — it never touches the learned **weights** (`nn.Linear`'s `.weight`, the attention/embedding tables). Weights keep being updated by gradient descent exactly as before; dropout only reaches into the *result* of a specific forward pass, for that one batch, and is gone the moment that pass ends.
+
+**Worked example.** Say the feedforward's hidden layer (after GELU) produces, for one token:
+
+```text
+hidden = [0.5, -0.2, 0.8, 0.1, 0.9, 0.3, -0.4, 0.6]
+```
+
+With `dropout=0.25` (each position independently has a 25% chance of being zeroed this pass), suppose this call's random draw zeroes positions 1 and 5:
+
+```text
+after zeroing:  [0.5, 0, 0.8, 0.1, 0.9, 0, -0.4, 0.6]
+```
+
+The surviving values are then scaled up by `1 / (1 - 0.25) = 1.333` ("inverted dropout", handled automatically by `nn.Dropout`) so the vector's overall magnitude stays comparable to what the next layer would see with dropout off:
+
+```text
+final:          [0.667, 0, 1.067, 0.133, 1.2, 0, -0.533, 0.8]
+```
+
+**The positions zeroed are random and different on every single forward call** — no neuron is ever "permanently" turned off. This is exactly why it helps generalization: the model can't lean on any one neuron always being present, so it's pushed to solve the task using many different combinations of its neurons across training steps, instead of a few dominant shortcuts that might just be memorizing the training set.
+
+**At `model.eval()` (generation), `nn.Dropout` does nothing** — every value passes through untouched, no zeroing, no scaling. This is why toggling `model.eval()`/`model.train()` (already done in `estimate_loss()`) actually matters now — before dropout existed anywhere in this model, that toggle was a no-op.
+
+### Where dropout is applied here
+
+Right before joining back into the residual stream, so it only ever perturbs the "correction" a sub-layer contributes, never the residual `x` itself:
+
+- Inside `AttentionHead`, right after the softmax (on the attention weights, before multiplying by `V`).
+- At the end of `MultiAttentionHead`, right after the final `proj` linear layer.
+- At the end of `FeedForward`, right after its second `Linear`.
+- One more spot outside any block: right after summing token + positional embeddings in `gpt.py`, before the first block.

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import math
 
 class AttentionHead(nn.Module): # as in bigram, our model is torch.nn.Module
-    def __init__(self, n_embd, head_size, context_window):
+    def __init__(self, n_embd, head_size, context_window, dropout):
         super().__init__()
         # 1. attributes
         self.head_size = head_size
@@ -15,8 +15,11 @@ class AttentionHead(nn.Module): # as in bigram, our model is torch.nn.Module
         self.key = nn.Linear(n_embd, head_size)
         self.value = nn.Linear(n_embd, head_size)
 
-        #3. masked 
+        #d3. masked 
         self.register_buffer('tril', torch.tril(torch.ones(context_window, context_window)))
+
+        # 4. dropout
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         batch_size, seq_length, n_embd = x.shape
@@ -32,5 +35,7 @@ class AttentionHead(nn.Module): # as in bigram, our model is torch.nn.Module
         # [:seq_length, :seq_length] cause the actual input could be smaller tahn context_window
         # and fill the future positions with -inf --> i no match with j > i
         weights = F.softmax(scores, dim = -1) # for each row i, weigths on j sum 1
+        #adding dropout
+        weights = self.dropout(weights)
         out = weights @ v
         return out

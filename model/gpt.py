@@ -3,7 +3,7 @@ import torch.nn as nn
 from model.block import Block
 
 class GPT(nn.Module):
-    def __init__(self, vocab_size, n_embd, num_heads, n_layer, context_window):
+    def __init__(self, vocab_size, n_embd, num_heads, n_layer, context_window, dropout):
         super().__init__()
 
         # 1. embedding table initialize randomly
@@ -12,7 +12,7 @@ class GPT(nn.Module):
         self.position_embedding_table = nn.Embedding(context_window, n_embd)
         # 3. block
         self.blocks = nn.Sequential(
-            *[Block(n_embd, num_heads, context_window) for _ in range(n_layer)]
+            *[Block(n_embd, num_heads, context_window, dropout) for _ in range(n_layer)]
         )
         # 4. Final layer tonNormalize 
         self.ln_f = nn.LayerNorm(n_embd)
@@ -21,6 +21,7 @@ class GPT(nn.Module):
 
         # *saving context_window to generate
         self.context_window = context_window
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, idx, targets=None):
         batch_size, seq_length = idx.shape
@@ -30,6 +31,7 @@ class GPT(nn.Module):
         # adding positional embedding, tensor of shape (seq_length, n_embd)
         pos_emb = self.position_embedding_table(torch.arange(seq_length, device=idx.device))
         x = token_emb + pos_emb #input x (batch_size, seq_length, num_embd)
+        x = self.dropout(x)
         # input x througth block , (batch_size, seq_length, num_embd)
         x = self.blocks(x)
         # final layer norm, (batch_size, seq_length, num_embd)

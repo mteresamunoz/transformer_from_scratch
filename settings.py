@@ -35,6 +35,7 @@ CONFIGS = {
             'num_heads': 6,
             'n_layer': 6,
             'context_window': 256,  # must match 'seq_length' below — see dataloader/README.md
+            'dropout': 0.2
         },
         'batch_size': 64,
         'seq_length': 256,
