@@ -2,6 +2,19 @@
 
 Everything on this page applies unchanged no matter which model is plugged into `train.py` — the bigram, or later the full GPT. That's by design: `train.py` only ever calls a model's `forward(idx, targets)` and reads back `(logits, loss)`, so the training loop, the optimizer, `estimate_loss()`, early stopping, and checkpointing all stay identical regardless of what happens *inside* `forward()`. The worked numeric examples below use the bigram's tiny `(4, 4)` table purely because its numbers are small enough to trace by hand — the same gradient/optimizer/loss mechanics apply verbatim to the GPT's much larger matrices. See `model/README.md` for what actually differs between models (that's architecture, not training).
 
+## Quick reference: forward vs backward vs optimizer step vs gradient descent
+
+Four terms that are easy to conflate — what each one actually does, and crucially, whether it changes any weight:
+
+| Step | What it does | Changes weights? | Where |
+|---|---|---|---|
+| **Forward** (`model(xb, yb)`) | Computes `logits` and `loss` using the model's **current** weights, as they are right now | **No** — pure calculation, a snapshot of the current state | `model.forward()` |
+| **Backward** (`loss.backward()`) | Computes the **gradient**: for every weight, "which direction and how much would nudging it reduce the loss?" — by walking backward through the computation graph built during the forward pass | **No** — only computes and stores those numbers (in each parameter's `.grad`), doesn't touch any weight yet | PyTorch autograd |
+| **Optimizer step** (`optimizer.step()`) | Uses the gradients already computed (`.grad`) to actually **move** each weight a little | **Yes — the only step that changes weights** | `torch.optim.AdamW` |
+| **Gradient descent** | The name for the overall **strategy**: repeat forward → backward → step thousands of times so the loss trends downward | Not a single step — it's the whole loop | The `for` loop in `train.py` |
+
+`backpropagation` (what `.backward()` does) is specifically the technique for *computing* gradients efficiently via the chain rule; "gradient descent" is the broader strategy that *uses* those gradients, repeatedly, to actually optimize the weights. Neither `forward()` nor `.backward()` ever changes a weight by itself — only `optimizer.step()` does, and only because it has gradients from `.backward()` to work with.
+
 Three distinct phases that are easy to blur together. The confusing part is usually: *where does the "input" come from, and is there a target or not?* — the answer is different in each phase, so let's pin that down explicitly, using the tiny 4-character (`a,b,c,d`) table example from `model/BIGRAM.md`.
 
 ## Phase 1 — model initialization: random, untrained
