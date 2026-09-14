@@ -1,33 +1,39 @@
-# we are going to use the model to generate text
+import argparse
 import os
 import torch
-from model.bigram import BigramLanguageModel
 from data.shakespeare_char.tokenizer import get_tokenizer
+from settings import CONFIGS
 
-dir_path = os.path.dirname(os.path.realpath(__file__)) # get the directory path of the current file
+dir_path = os.path.dirname(os.path.realpath(__file__))
+
+# 0. pick which trained model to load and generate from, e.g.:
+#    python generate.py --model bigram --prompt "ROMEO: "
+#    python generate.py --model gpt --prompt "ROMEO: " --max_new_tokens 500
+parser = argparse.ArgumentParser()
+parser.add_argument('--model', choices=CONFIGS.keys(), default='bigram')
+parser.add_argument('--prompt', default='ROMEO: ')
+parser.add_argument('--max_new_tokens', type=int, default=300)
+args = parser.parse_args()
 
 # 1. load tokenizer
 encode, decode, vocab_size = get_tokenizer()
 
 # 2. load model checkpoint
-# 2.1 devide cuda?
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-# 2.2 load best checkpoint
-best_checkpoint_path = os.path.join(dir_path, 'checkpoints/bigram/best.pt')
+best_checkpoint_path = os.path.join(dir_path, 'checkpoints', args.model, 'best.pt')
 best_checkpoint = torch.load(best_checkpoint_path, map_location=device)
-# 2.3 load state dict
-model = BigramLanguageModel(**best_checkpoint['model_args'])
+
+model_class = CONFIGS[args.model]['model_class']
+model = model_class(**best_checkpoint['model_args'])
 model.load_state_dict(best_checkpoint['model_state_dict'])
 model.to(device)
 
 # 3. encode prompt
-prompt = "ROMEO: "
-max_new_tokens = 300
-# remember: idx (batch_size, seq_length) --> bigram (1, context_window)
-idx = torch.tensor([encode(prompt)], dtype=torch.long)
+idx = torch.tensor([encode(args.prompt)], dtype=torch.long)
 idx = idx.to(device)
 
-# 3. generate
-output = decode(model.generate(idx, max_new_tokens)[0].tolist())
-print(f'Prompt: {prompt} \n')
-print(f'output: ¨{output}')
+# 4. generate
+output = decode(model.generate(idx, args.max_new_tokens)[0].tolist())
+print(f'Model: {args.model}')
+print(f'Prompt: {args.prompt} \n')
+print(f'output: "{output}"')

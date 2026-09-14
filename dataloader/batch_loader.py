@@ -18,7 +18,11 @@ seq_length = 32 # length of each sequence (a.k.a. context window, for now — se
 # BUT we have just one chunk of data, but we need to create a batch of data, so we will repeat this process batch_size times
 # a function that will generate a batch of data for training, and return x and y as torch tensors 2D (batch_size, seq_length)
 
-def get_batch(split):
+def get_batch(split, batch_size=batch_size, seq_length=seq_length):
+    # batch_size/seq_length default to this module's own values, but callers
+    # (train.py, via settings.py) can pass their own per-model values instead —
+    # e.g. the bigram and the GPT don't need the same seq_length.
+
     # 1. we will choose the data based on the split (train or val)
     data = train_data if split == 'train' else val_data
 
