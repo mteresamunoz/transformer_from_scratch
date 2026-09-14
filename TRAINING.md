@@ -1,6 +1,8 @@
 # Training walkthrough
 
-Three distinct phases that are easy to blur together. The confusing part is usually: *where does the "input" come from, and is there a target or not?* — the answer is different in each phase, so let's pin that down explicitly, using the tiny 4-character (`a,b,c,d`) table example from `model/README.md`.
+Everything on this page applies unchanged no matter which model is plugged into `train.py` — the bigram, or later the full GPT. That's by design: `train.py` only ever calls a model's `forward(idx, targets)` and reads back `(logits, loss)`, so the training loop, the optimizer, `estimate_loss()`, early stopping, and checkpointing all stay identical regardless of what happens *inside* `forward()`. The worked numeric examples below use the bigram's tiny `(4, 4)` table purely because its numbers are small enough to trace by hand — the same gradient/optimizer/loss mechanics apply verbatim to the GPT's much larger matrices. See `model/README.md` for what actually differs between models (that's architecture, not training).
+
+Three distinct phases that are easy to blur together. The confusing part is usually: *where does the "input" come from, and is there a target or not?* — the answer is different in each phase, so let's pin that down explicitly, using the tiny 4-character (`a,b,c,d`) table example from `model/BIGRAM.md`.
 
 ## Phase 1 — model initialization: random, untrained
 
@@ -8,7 +10,7 @@ Three distinct phases that are easy to blur together. The confusing part is usua
 model = BigramLanguageModel(vocab_size)
 ```
 
-This allocates the `(vocab_size, vocab_size)` table and fills it with **random** numbers (see the worked example in `model/README.md`). No data has been touched yet, no training has happened. There isn't really an "input" concept yet at this point — we've just created empty, meaningless parameters. If you called `generate()` right now, you'd get garbage — which is exactly what we saw in `model/test_bigram.py`.
+This allocates the `(vocab_size, vocab_size)` table and fills it with **random** numbers (see the worked example in `model/BIGRAM.md`). No data has been touched yet, no training has happened. There isn't really an "input" concept yet at this point — we've just created empty, meaningless parameters. If you called `generate()` right now, you'd get garbage — which is exactly what we saw in `model/test_bigram.py`.
 
 ## Phase 2 — training: the input comes from the dataset, automatically
 
