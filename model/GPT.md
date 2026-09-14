@@ -26,6 +26,8 @@ flowchart TD
 
 Every arrow's shape stays `(batch, seq_length, n_embd)` until the very last `Linear`, which projects up to `(batch, seq_length, vocab_size)` — see `ATTENTION.md` and `BLOCK.md` for exactly how each box gets there.
 
+**Two different `LayerNorm` scopes, easy to conflate**: the `ln1`/`ln2` inside each block (see `BLOCK.md`) are *pre-norm* — applied before attention/feedforward, repeated twice per block, `n_layer` times over (12 separate `LayerNorm`s for `n_layer=6`). The **"Final LayerNorm"** in the diagram above is a *different*, single `nn.LayerNorm` instance, applied exactly once, only here in `gpt.py`, after the entire stack of blocks and before the output projection — not part of any block, not repeated. Both exist at the same time, for the same general reason (keep activations well-behaved through depth), just at different scopes.
+
 ## What we're building vs. the original (2017) and modern (2023+) choices
 
 | Component | Original Transformer (2017) | **GPT-2 / nanoGPT (what we build)** | Modern, e.g. Llama-style |
